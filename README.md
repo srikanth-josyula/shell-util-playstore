@@ -17,4 +17,6 @@
 - **Create A Simple Temporary Directory with Custom Name:** Creates a temporary directory in `/tmp` with a custom name template.
   - **Usage:** `mktemp -d [template]` (e.g., `mktemp -d random-xxxxx`)
   You can also add a suffix to a template while creating the directory, for example:
-  - **Example:** `mktemp -d random-xxxxx_suffix`
+  - **Example:** `mktemp -d --suffix TODAY random-xxxxxTODAY`
+- **Remove Empty Directory (`rmdir`):** Removes an empty directory.
+  - **Usage:** `rmdir [directory name]`
