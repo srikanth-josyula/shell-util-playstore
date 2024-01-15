@@ -1,28 +1,13 @@
-#!/bin/bash
+SEARCH_PATH="/u01/software/test"
+SEARCH_DIR="logs"
 
-# Set the directory to search
-search_path="/path/to/search"
+# Find directories with a name
+if (find "$SEARCH_PATH" -type d -name "$SEARCH_DIR"); then
+    echo "Directory '${SEARCH_DIR}' exists."
 
-# Find files with a specific name pattern
-find "$search_path" -name "pattern"
-
-# Find directories
-find "$search_path" -type d
-
-# Find files of a specific size (e.g., greater than 10M)
-find "$search_path" -type f -size +10M
-
-# Execute a command on each found file or directory (replace "your_command" with the actual command)
-find "$search_path" -type f -exec your_command {} \;
-
-# Print the path of each found file or directory
-find "$search_path" -print
-
-# Find files modified within the last 7 days
-find "$search_path" -type f -mtime -7
-
-# Find files owned by a specific user (replace "username" with the actual username)
-find "$search_path" -type f -user username
-
-# Find files belonging to a specific group (replace "groupname" with the actual group name)
-find "$search_path" -type f -group groupname
+     # find file under the specified directory with format
+     SEARCH_FILES=$(find "${SEARCH_PATH}/${SEARCH_DIR}" -type f -name "*.out")
+     echo "Files with command found: $SEARCH_FILES"
+else
+    echo "Couldn't find a directory with name ${SEARCH_DIR}"
+fi
