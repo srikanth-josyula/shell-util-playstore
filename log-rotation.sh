@@ -7,93 +7,87 @@
 # Log directory
 LOGDIR=/Data01/alfresco7.2/tomcat/logs
 LOGBACKUPDIR=/Data01/old_logs
+TEMPDIR=/path/to/temp_directory
 
 # Maximum FileSize of the log (in MB)
 MAXFILESIZE=20
 
-echo "Log rotation script started at "$(date '+%Y-%m-%d_%H:%M:%S')
-
-for LOGFILE in "$LOGDIR"/*; do
-
-  # Date and Time
-  DATE_FOLDER=$(date '+%Y-%m-%d')
-  TIME_FOLDER=$(date '+%H:%M:%S')
-
-  # Get size in MB
-  FILE_SIZE=$(du -m "$LOGFILE" | cut -f1)
-
-  if [ "$FILE_SIZE" -gt "$MAXFILESIZE" ]; then
-
-    # Check if a date folder exists
-    if [ ! -d "$LOGBACKUPDIR/$DATE_FOLDER" ]; then
-      # Date folder does not exist; creating one
-      echo 'Creating Date folder' "$DATE_FOLDER"
-      mkdir -p "$LOGBACKUPDIR/$DATE_FOLDER"
-    fi
-
-    # Get filename
-    FILENAME=$(basename "$LOGFILE")
-
-    # Move the files
-    echo 'Moving' "$FILENAME" 'to' "$LOGBACKUPDIR/$DATE_FOLDER"
-    cp "$LOGFILE" "$LOGBACKUPDIR/$DATE_FOLDER"
-    sudo rm "$LOGFILE"
-    mv "$LOGBACKUPDIR/$DATE_FOLDER/$FILENAME" "$LOGBACKUPDIR/$DATE_FOLDER/$FILENAME.${DATE_FOLDER}_${TIME_FOLDER}"
-
+# Function to create date folder
+create_date_folder() {
+  local folder="$1/$(date '+%Y/%m/%d')"
+  if [ ! -d "$folder" ]; then
+    echo "Creating Date folder: $folder"
+    mkdir -p "$folder"
   fi
-done
+}
 
-# Zipping old logs
-PREVDAY=$(date --date="yesterday" +"%Y-%m-%d")
-if [ -d "$LOGBACKUPDIR/$PREVDAY" ]; then
-  # Compress and clear the log file
-  cd "$LOGBACKUPDIR" || exit
-  zip -r "$PREVDAY.zip" "$PREVDAY"
+# Function to move and clear log files
+move_and_clear_log() {
+  local logfile="$1"
+  local target_folder="$2"
+  local filename=$(basename "$logfile")
 
-  # Clear archive folder
-  echo "Deleting $LOGBACKUPDIR/$PREVDAY"
-  rm -rf "$LOGBACKUPDIR/$PREVDAY"
-fi
+  echo "Moving $filename to $target_folder"
+  cp "$logfile" "$target_folder"
+  sudo echo >"$logfile"
+  mv "$target_folder/$filename" "$target_folder/$filename.$(date '+%Y-%m-%d_%H:%M:%S')"
+}
 
-# Additional Directory Operations
+# Function to zip old logs and delete log files
+zip_and_delete_logs() {
+  local folder_date="$1"
+  local folder="$LOGBACKUPDIR/$folder_date"
 
-# Create a folder with year/month/date in the directory
-current_year=$(date '+%Y')
-current_month=$(date '+%m')
-current_day=$(date '+%d')
+  if [ -d "$folder" ]; then
+    cd "$LOGBACKUPDIR" || exit
+    echo "Zipping and deleting logs in folder: $folder_date"
+    zip -r "$folder_date.zip" "$folder_date"
+    rm -rf "$folder_date"
+  fi
+}
 
-year_month_date_folder="$LOGBACKUPDIR/$current_year/$current_month/$current_day"
-mkdir -p "$year_month_date_folder"
+# Function to move logs to temp folder
+move_to_temp() {
+  local folder_date="$1"
+  local folder="$LOGBACKUPDIR/$folder_date"
+  local temp_suffix=$(date --date="6 months ago" +"half_yearly-%Y")
+  local temp_folder="$TEMPDIR/$temp_suffix"
 
-# Check the file size of Catalina logs and copy to the new folder
-CATALINA_LOG="$LOGDIR/catalina.out"
-CATALINA_SIZE=$(du -m "$CATALINA_LOG" | cut -f1)
-if [ "$CATALINA_SIZE" -gt "$MAXFILESIZE" ]; then
-  cp "$CATALINA_LOG" "$year_month_date_folder"
-  sudo echo >"$CATALINA_LOG"
-fi
+  if [ -d "$folder" ]; then
+    echo "Moving logs in folder $folder_date to temp folder: $temp_folder"
+    mv "$folder" "$temp_folder"
+  fi
+}
 
-# Set permissions to the new folder regularly
-chown -R alfresco:alfresco "$year_month_date_folder"
-chmod -R 775 "$year_month_date_folder"
+# Function to clear empty folders
+clear_empty_folders() {
+  find "$LOGBACKUPDIR" -type d -empty -delete
+}
 
-# After 3 months, zip the folders and delete log files
-zip_folder_date=$(date --date="3 months ago" +"%Y/%m/%d")
-zip_folder="$LOGBACKUPDIR/$zip_folder_date"
-if [ -d "$zip_folder" ]; then
-  cd "$LOGBACKUPDIR" || exit
-  zip -r "$zip_folder_date.zip" "$zip_folder_date"
-  rm -rf "$zip_folder_date"
-fi
+# Main log rotation script
+main_log_rotation() {
+  echo "Log rotation script started at $(date '+%Y-%m-%d_%H:%M:%S')"
 
-# After 6 months, move to temp folder with a suffix
-temp_suffix=$(date --date="6 months ago" +"half_yearly-%Y")
-temp_folder="/path/to/temp_directory/$temp_suffix"
-if [ -d "$zip_folder" ]; then
-  mv "$zip_folder" "$temp_folder"
-fi
+  # Process Catalina logs
+  CATALINA_LOG="$LOGDIR/catalina.out"
+  CATALINA_SIZE=$(du -m "$CATALINA_LOG" | cut -f1)
 
-# Clear any empty folders later found
-find "$LOGBACKUPDIR" -type d -empty -delete
+  if [ "$CATALINA_SIZE" -gt "$MAXFILESIZE" ]; then
+    create_date_folder "$LOGBACKUPDIR"
+    move_and_clear_log "$CATALINA_LOG" "$LOGBACKUPDIR/$(date '+%Y/%m/%d')"
+  fi
 
-echo "Script completed successfully!"
+  # Zipping old logs
+  zip_and_delete_logs "$(date --date='3 months ago' +'%Y/%m/%d')"
+
+  # Moving logs to temp folder
+  move_to_temp "$(date --date='6 months ago' +'%Y/%m/%d')"
+
+  # Clearing empty folders
+  clear_empty_folders
+
+  echo "Script completed successfully!"
+}
+
+# Execute main script
+main_log_rotation
